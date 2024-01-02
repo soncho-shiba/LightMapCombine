@@ -4,7 +4,7 @@
 // BEGIN__HARVEST_EXCEPTION_ZSTRING
 
 <javascriptresource>
-<name>$$$/JavaScripts/CombineLightmap/Menu=CombineLightmap...</name>
+<name>$$$/JavaScripts/LightmapCombine/Menu=LightmapCombine...</name>
     <category>SonTools</category>
 </javascriptresource>
 
@@ -16,6 +16,9 @@ app.playbackDisplayDialogs = DialogModes.ALL
 #target photoshop
 #include "json2.js"
 
+const COMBINED_LM_MAIN_TEX_FIT = '_CombinedLM_MainTexFit';
+const COMBINED_LM_LIGHTMAP_FIT = '_CombinedLM_LightmapFit';
+
 function main() {
     // JSONファイルを選択
     var jsonFile = File.openDialog("JSONファイルを選択してください");
@@ -24,6 +27,10 @@ function main() {
         return;
     }
 
+    var method = selectCompositionMethod();
+    if (method === null) return; // ユーザーがキャンセルした場合
+    
+    
     // JSONファイルを読み込み
     // TODO: 正しいフォーマットのJSONであるかどうかを確認するvalidationを追加する
     jsonFile.open('r');
@@ -32,31 +39,106 @@ function main() {
 
     // JSONをパース
     var data = JSON.parse(jsonData);
+    
     if (data.objects.length > 0) {
         var obj = data.objects[0];
 
-        // mainTextureのディレクトリパスを取得
-        var mainTextureFile = new File(obj.materials[0].mainTexturePath);
-        var mainTextureDir = mainTextureFile.parent.fsName;
-
-        // mainTextureのファイル名（拡張子なし）を取得
-        var mainTextureName = mainTextureFile.name.replace(/\.[^\.]+$/, '');
-
-        if (obj.materials.length > 0 && obj.materials[0].mainTexturePath != "") {
-            openAndPlace(obj.materials[0].mainTexturePath, null);
+        if (method === "MainTexFit") {
+            performMainTexFit(obj);
+        } else if (method === "LightmapFit") {
+            performLightmapFit(obj);
         }
+        
+    }
+}
 
-        if (obj.lightmapPath !== "") {
-            openAndPlace(obj.lightmapPath, app.activeDocument);
-            //setLayerToHardLight(app.activeDocument.activeLayer);
-            setLayerOpacity(app.activeDocument.activeLayer, 80);
+function selectCompositionMethod() {
+    var methodDialog = new Window("dialog", "合成モードを選択");
+    methodDialog.orientation = "column";
+    methodDialog.alignChildren = "fill";
+
+    var mainTexFitButton = methodDialog.add("button", undefined, "MainTexFit");
+    var lightmapFitButton = methodDialog.add("button", undefined, "LightmapFit");
+
+    var chosenMethod = null;
+
+    mainTexFitButton.onClick = function() {
+        chosenMethod = "MainTexFit";
+        methodDialog.close();
+    };
+
+    lightmapFitButton.onClick = function() {
+        chosenMethod = "LightmapFit";
+        methodDialog.close();
+    };
+
+    methodDialog.show();
+    return chosenMethod;
+}
+
+
+function performMainTexFit(obj) {
+    // mainTextureのディレクトリパスを取得
+    var mainTextureFile = new File(obj.materials[0].mainTexturePath);
+    var mainTextureDir = mainTextureFile.parent.fsName;
+
+    // mainTextureのファイル名（拡張子なし）を取得
+    var mainTextureName = mainTextureFile.name.replace(/\.[^\.]+$/, '');
+
+    if (obj.materials.length > 0 && obj.materials[0].mainTexturePath != "") {
+        openAndPlace(obj.materials[0].mainTexturePath, null);
+    }
+
+    if (obj.lightmapPath !== "") {
+        openAndPlace(obj.lightmapPath, app.activeDocument);
+        
+        //setLayerToHardLight(app.activeDocument.activeLayer);
+        setLayerOpacity(app.activeDocument.activeLayer, 80);
+        
+        var scaleU = obj.lightmapScaleOffset.scaleU;
+        var scaleV = obj.lightmapScaleOffset.scaleV;
+        scaleLayer(app.activeDocument.activeLayer, 1 / scaleU, 1 / scaleV);
+
+        var offsetU = obj.lightmapScaleOffset.offsetU;
+        var offsetV = obj.lightmapScaleOffset.offsetV;
+        transformLayer(app.activeDocument.activeLayer, -offsetU,-offsetV);
+        
+        // 保存処理を追加
+        saveDocument(app.activeDocument, mainTextureDir, mainTextureName + COMBINED_LM_MAIN_TEX_FIT);
+    }
+}
+
+function performLightmapFit(obj) {
+    
+    // mainTextureのディレクトリパスを取得
+    var mainTextureFile = new File(obj.materials[0].mainTexturePath);
+    var mainTextureDir = mainTextureFile.parent.fsName;
+
+    // mainTextureのファイル名（拡張子なし）を取得
+    var mainTextureName = mainTextureFile.name.replace(/\.[^\.]+$/, '');
+    //TODO:mainTexが""もしくはパスに存在しない場合のエラーハンドリングを書く
+    if (obj.materials.length > 0) {
+        if(obj.materials[0].mainTexturePath != "") {
+            openAndPlace(obj.materials[0].mainTexturePath, null);
+
             var scaleU = obj.lightmapScaleOffset.scaleU;
             var scaleV = obj.lightmapScaleOffset.scaleV;
-            scaleLayer(app.activeDocument.activeLayer, 1 / scaleU, 1 / scaleV);
+            scaleLayer(app.activeDocument.activeLayer, scaleU, scaleV);
 
-            // 保存処理を追加
-            saveDocument(app.activeDocument, mainTextureDir, mainTextureName + '_CombinedLM');
+            var offsetU = obj.lightmapScaleOffset.offsetU;
+            var offsetV = obj.lightmapScaleOffset.offsetV;
+            transformLayer(app.activeDocument.activeLayer, offsetU, offsetV);    
         }
+    }
+
+    if (obj.lightmapPath !== "") {
+        openAndPlace(obj.lightmapPath, app.activeDocument);
+        
+        //setLayerToHardLight(app.activeDocument.activeLayer);
+        setLayerOpacity(app.activeDocument.activeLayer, 80);
+
+        // 保存処理を追加
+        saveDocument(app.activeDocument, mainTextureDir, mainTextureName + COMBINED_LM_LIGHTMAP_FIT);
     }
 }
 
@@ -94,15 +176,14 @@ function setLayerOpacity(layer, opacity) {
 }
 
 function scaleLayer(layer, scaleX, scaleY) {
-    var desc = new ActionDescriptor();
-
-    var bounds = layer.bounds;
-    var width = bounds[2].value - bounds[0].value;
-    var height = bounds[3].value - bounds[1].value;
-    //TODO: 百分率に変換する処理をどこに持たせるとよいか考える
     layer.resize(scaleX * 100, scaleY * 100, AnchorPosition.BOTTOMLEFT);
 }
 
+function transformLayer(layer, offsetX, offsetY) {
+    var canvasWidth = app.activeDocument.width;
+    var canvasHeight = app.activeDocument.height;
+    layer.translate(canvasWidth * (offsetX/1), canvasHeight * (offsetY/1));
+}
 function saveDocument(doc, path, name) {
     var saveFile = new File(path + "/" + name + ".tga");
     var saveOptions = new TargaSaveOptions();
