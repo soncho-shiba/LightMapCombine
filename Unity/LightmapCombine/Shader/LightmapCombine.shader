@@ -16,15 +16,15 @@ Shader "LightmapCombine"
 
         Pass
         {   
-//            //RenderTexture書き込み用
-//            Cull off
-//            ZTest Always
-//            ZWrite Off
+           //RenderTexture書き込み用
+            Cull off
+            ZTest Always
+            ZWrite Off
             
             //Debug用
-            Cull Back
-            ZTest Less
-            ZWrite On
+//            Cull Back
+//            ZTest Less
+//            ZWrite On
 
             
             CGPROGRAM
@@ -73,17 +73,19 @@ Shader "LightmapCombine"
                 
                 // Lightmap UVs
                 float2 lightmapUV = i.uv;
-                lightmapUV.x = lightmapUV.x *_ScaleU + _OffsetU;
+                lightmapUV.x = lightmapUV.x * _ScaleU + _OffsetU;
                 lightmapUV.y = lightmapUV.y * _ScaleV + _OffsetV;
 
                 // Lightmap color
                 fixed4 lightmapCol = tex2D(_Lightmap, lightmapUV);
                 lightmapCol.rgb = DecodeHDR(lightmapCol, _Lightmap_HDR);
-                
-                // Combine main texture and lightmap
-                fixed4 finalCol = mainCol * (lightmapCol/_ScaleFactor);
- 
-                return fixed4(finalCol.xyz,mainCol.w);
+
+                // Calculate final color
+                float lightIntensity = max(max(lightmapCol.r, lightmapCol.g), lightmapCol.b);
+                half3 finalCol = mainCol.rgb * lightIntensity + lightmapCol.rgb;
+
+                // Use the alpha channel from the main texture
+                return fixed4(finalCol, mainCol.w);
             }
             ENDCG
         }
