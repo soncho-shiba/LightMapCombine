@@ -15,7 +15,9 @@ public class LightmapCombine : ScriptableWizard
     }
 
     private void OnWizardCreate()
-    {
+    {   
+        CheckColorSpace();
+        
         var objectsWithLightmap = GetObjectsWithLightmap();
         
         foreach (var obj in objectsWithLightmap)
@@ -31,7 +33,18 @@ public class LightmapCombine : ScriptableWizard
             }
         }
     }
-
+    
+    private void CheckColorSpace()
+    {
+        if (PlayerSettings.colorSpace != ColorSpace.Linear)
+        {
+            EditorUtility.DisplayDialog("Color Space Warning",
+                "The project is not set to use Linear color space. " +
+                "This tool requires a Linear workflow.",
+                "OK");
+        }
+    }
+    
     private static List<GameObject> GetObjectsWithLightmap()
     {
         var allObjects = UnityEngine.Object.FindObjectsOfType<GameObject>();
@@ -45,7 +58,6 @@ public class LightmapCombine : ScriptableWizard
                 objectsWithLightmap.Add(obj);
             }
         }
-
         return objectsWithLightmap;
     }
 
