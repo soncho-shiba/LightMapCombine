@@ -28,7 +28,7 @@ public class LightmapCombine : ScriptableWizard
                 EnableSRGBOnMainTex(originalMaterial);
                 var tempMaterial = new Material(Shader.Find(SHADER_NAME_LIGHTMAPCOMBINE));
                 SetUpMaterial(tempMaterial, meshRenderer, originalMaterial);
-                var newTexture = ExportTexture(tempMaterial, originalMaterial);
+                var newTexture = ExportTexture(tempMaterial, originalMaterial, obj.name);
                 CreateMaterialVariant(originalMaterial, newTexture, obj.name);
             }
         }
@@ -114,8 +114,8 @@ public class LightmapCombine : ScriptableWizard
             tempMaterial.SetTexture("_MainTex", originalMaterial.GetTexture("_MainTex"));
         }
     }
-    
-    private Texture2D ExportTexture(Material tempMaterial, Material originalMaterial)
+
+    private Texture2D ExportTexture(Material tempMaterial, Material originalMaterial, string objName)
     {
         var mainTex = tempMaterial.GetTexture("_MainTex") as Texture2D;
         if (mainTex == null)
@@ -134,7 +134,7 @@ public class LightmapCombine : ScriptableWizard
         texture.Apply();
         RenderTexture.active = currentRT;
 
-        var savePath = SaveTextureAsset(texture.EncodeToPNG(), mainTex);
+        var savePath = SaveTextureAsset(texture.EncodeToPNG(), mainTex,objName);
         RenderTexture.ReleaseTemporary(renderTexture);
 
         if (!string.IsNullOrEmpty(savePath)) {
@@ -171,7 +171,7 @@ public class LightmapCombine : ScriptableWizard
         newTextureImporter.SaveAndReimport();
     }
     
-    private string SaveTextureAsset(byte[] target, Texture2D mainTex)
+    private string SaveTextureAsset(byte[] target, Texture2D mainTex, string objName)
     {
         var sourcePath = AssetDatabase.GetAssetPath(mainTex);
         var path = Path.GetDirectoryName(sourcePath);
@@ -181,7 +181,7 @@ public class LightmapCombine : ScriptableWizard
             Directory.CreateDirectory(path);
         }
 
-        var fileName = Path.GetFileNameWithoutExtension(sourcePath) + "_lightmapCombined." + ext;
+        var fileName = Path.GetFileNameWithoutExtension(sourcePath) + "_" + objName +  "_lightmapCombined." + ext;
         fileName = Path.GetFileNameWithoutExtension(AssetDatabase.GenerateUniqueAssetPath(Path.Combine(path, fileName)));
         path = EditorUtility.SaveFilePanelInProject("Save Asset", fileName, ext, "", path);
 
