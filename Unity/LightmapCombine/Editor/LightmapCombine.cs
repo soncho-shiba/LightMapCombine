@@ -23,9 +23,10 @@ public class LightmapCombine : ScriptableWizard
             var meshRenderer = obj.GetComponent<MeshRenderer>();
             foreach (var originalMaterial in meshRenderer.sharedMaterials)
             {
+                EnableSRGBOnMainTex(originalMaterial);
                 var tempMaterial = new Material(Shader.Find(SHADER_NAME_LIGHTMAPCOMBINE));
                 SetUpMaterial(tempMaterial, meshRenderer, originalMaterial);
-                var newTexture = ExportTexture(tempMaterial);
+                var newTexture = ExportTexture(tempMaterial, originalMaterial);
                 CreateMaterialVariant(originalMaterial, newTexture, obj.name);
             }
         }
@@ -47,7 +48,43 @@ public class LightmapCombine : ScriptableWizard
 
         return objectsWithLightmap;
     }
-    
+
+    private void EnableSRGBOnMainTex(Material material)
+    {
+        if (material == null)
+        {
+            Debug.LogError("Material is null.");
+            return;
+        }
+
+        if (!material.HasProperty("_MainTex"))
+        {
+            Debug.LogError("Material does not have a _MainTex property.");
+            return;
+        }
+
+        var mainTex = material.GetTexture("_MainTex") as Texture2D;
+        if (mainTex == null)
+        {
+            Debug.LogError("_MainTex is not assigned in the material.");
+            return;
+        }
+
+        var texturePath = AssetDatabase.GetAssetPath(mainTex);
+        var textureImporter = AssetImporter.GetAtPath(texturePath) as TextureImporter;
+        if (textureImporter == null)
+        {
+            Debug.LogError("Failed to get TextureImporter for the main texture.");
+            return;
+        }
+
+        if (!textureImporter.sRGBTexture)
+        {
+            textureImporter.sRGBTexture = true;
+            textureImporter.SaveAndReimport();
+        }
+    }
+
     private void SetUpMaterial(Material tempMaterial, MeshRenderer meshRenderer, Material originalMaterial)
     {
         tempMaterial.SetFloat("_ScaleU", meshRenderer.lightmapScaleOffset.x);
@@ -66,7 +103,7 @@ public class LightmapCombine : ScriptableWizard
         }
     }
     
-    private Texture2D ExportTexture(Material tempMaterial)
+    private Texture2D ExportTexture(Material tempMaterial, Material originalMaterial)
     {
         var mainTex = tempMaterial.GetTexture("_MainTex") as Texture2D;
         if (mainTex == null)
@@ -77,7 +114,7 @@ public class LightmapCombine : ScriptableWizard
 
         var renderTexture = RenderTexture.GetTemporary(mainTex.width, mainTex.height, 0, RenderTextureFormat.ARGBFloat);
         Graphics.Blit(mainTex, renderTexture, tempMaterial, 0);
-        
+    
         var currentRT = RenderTexture.active;
         RenderTexture.active = renderTexture;
         var texture = new Texture2D(renderTexture.width, renderTexture.height, TextureFormat.RGBAFloat, false);
@@ -90,16 +127,36 @@ public class LightmapCombine : ScriptableWizard
 
         if (!string.IsNullOrEmpty(savePath)) {
             AssetDatabase.ImportAsset(savePath);
-            var textureImporter             = AssetImporter.GetAtPath(savePath) as TextureImporter;
-            textureImporter.alphaSource     = TextureImporterAlphaSource.None;
-            textureImporter.isReadable      = false;
-            textureImporter.mipmapEnabled   = true;
-            textureImporter.wrapMode        = TextureWrapMode.Clamp;
-            textureImporter.SaveAndReimport();
+            ApplyTextureImportSettings(originalMaterial.GetTexture("_MainTex") as Texture2D, savePath);
             return AssetDatabase.LoadAssetAtPath<Texture2D>(savePath);
         }
 
         return null;
+    }
+
+    private void ApplyTextureImportSettings(Texture2D sourceTexture, string newTexturePath)
+    {
+        if (sourceTexture == null || string.IsNullOrEmpty(newTexturePath))
+        {
+            Debug.LogError("Source texture or new texture path is invalid.");
+            return;
+        }
+
+        var sourceTextureImporter = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(sourceTexture)) as TextureImporter;
+        var newTextureImporter = AssetImporter.GetAtPath(newTexturePath) as TextureImporter;
+        if (sourceTextureImporter == null || newTextureImporter == null)
+        {
+            Debug.LogError("Failed to get TextureImporter.");
+            return;
+        }
+        
+        newTextureImporter.sRGBTexture = sourceTextureImporter.sRGBTexture;
+        newTextureImporter.alphaSource     = sourceTextureImporter.alphaSource;
+        newTextureImporter.isReadable      = sourceTextureImporter.isReadable ;
+        newTextureImporter.mipmapEnabled   = sourceTextureImporter.mipmapEnabled;
+        newTextureImporter.wrapMode        = sourceTextureImporter.wrapMode;
+
+        newTextureImporter.SaveAndReimport();
     }
     
     private string SaveTextureAsset(byte[] target, Texture2D mainTex)
