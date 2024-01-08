@@ -15,19 +15,18 @@ public class LightmapCombine : ScriptableWizard
     }
 
     private void OnWizardCreate()
-    {   
-        // シーン内のオブジェクト取得
+    {
         var objectsWithLightmap = GetObjectsWithLightmap();
         
         foreach (var obj in objectsWithLightmap)
         {   
             var meshRenderer = obj.GetComponent<MeshRenderer>();
-            foreach (var material in meshRenderer.sharedMaterials)
+            foreach (var originalMaterial in meshRenderer.sharedMaterials)
             {
-                // 合成用一時マテリアルを作成
                 var tempMaterial = new Material(Shader.Find(SHADER_NAME_LIGHTMAPCOMBINE));
-                SetUpMaterial(tempMaterial, meshRenderer, material);
-                ExportTexture(tempMaterial);
+                SetUpMaterial(tempMaterial, meshRenderer, originalMaterial);
+                var newTexture = ExportTexture(tempMaterial);
+                CreateMaterialVariant(originalMaterial, newTexture, obj.name);
             }
         }
     }
@@ -58,8 +57,7 @@ public class LightmapCombine : ScriptableWizard
 
         if (LightmapSettings.lightmaps.Length > meshRenderer.lightmapIndex)
         {
-            var lmInfo = LightmapSettings.lightmaps[meshRenderer.lightmapIndex];
-            tempMaterial.SetTexture("_Lightmap", lmInfo.lightmapColor);
+            tempMaterial.SetTexture("_Lightmap", LightmapSettings.lightmaps[meshRenderer.lightmapIndex].lightmapColor);
         }
 
         if (originalMaterial.HasProperty("_MainTex"))
@@ -68,26 +66,18 @@ public class LightmapCombine : ScriptableWizard
         }
     }
     
-    private void ExportTexture(Material material)
+    private Texture2D ExportTexture(Material tempMaterial)
     {
-        var mainTex = material.GetTexture("_MainTex") as Texture2D;
+        var mainTex = tempMaterial.GetTexture("_MainTex") as Texture2D;
         if (mainTex == null)
         {
             Debug.LogError("MainTex is not assigned in the material.");
-            return;
-        }
-        var lightmap = material.GetTexture("_Lightmap") as Texture2D;
-        if (lightmap == null)
-        {
-            Debug.LogError("lightmap is not assigned in the material.");
-            return;
+            return null;
         }
 
-        // RenderTextureに変換後の値を書き込む
-        var renderTexture   = RenderTexture.GetTemporary(mainTex.width, mainTex.height, 0, RenderTextureFormat.ARGBFloat);
-        Graphics.Blit(lightmap, renderTexture, material, 0);
+        var renderTexture = RenderTexture.GetTemporary(mainTex.width, mainTex.height, 0, RenderTextureFormat.ARGBFloat);
+        Graphics.Blit(mainTex, renderTexture, tempMaterial, 0);
         
-        // RenderTextureの値をTextureに書きこむ
         var currentRT = RenderTexture.active;
         RenderTexture.active = renderTexture;
         var texture = new Texture2D(renderTexture.width, renderTexture.height, TextureFormat.RGBAFloat, false);
@@ -95,10 +85,9 @@ public class LightmapCombine : ScriptableWizard
         texture.Apply();
         RenderTexture.active = currentRT;
 
-        // エンコードして保存
-        var savePath = SaveAsset(texture.EncodeToPNG(), mainTex);
+        var savePath = SaveTextureAsset(texture.EncodeToPNG(), mainTex);
+        RenderTexture.ReleaseTemporary(renderTexture);
 
-        // テクスチャインポート設定
         if (!string.IsNullOrEmpty(savePath)) {
             AssetDatabase.ImportAsset(savePath);
             var textureImporter             = AssetImporter.GetAtPath(savePath) as TextureImporter;
@@ -107,30 +96,27 @@ public class LightmapCombine : ScriptableWizard
             textureImporter.mipmapEnabled   = true;
             textureImporter.wrapMode        = TextureWrapMode.Clamp;
             textureImporter.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(savePath);
         }
 
-        // RenderTextureを解放
-        RenderTexture.ReleaseTemporary(renderTexture);
+        return null;
     }
     
-    private string SaveAsset(byte[] target, Texture2D mainTex)
+    private string SaveTextureAsset(byte[] target, Texture2D mainTex)
     {
         var sourcePath = AssetDatabase.GetAssetPath(mainTex);
         var path = Path.GetDirectoryName(sourcePath);
         var ext = "png";
 
-        // ディレクトリが無ければ作る
         if (!Directory.Exists(path)) {
             Directory.CreateDirectory(path);
         }
 
-        // ファイル保存パネルを表示
         var fileName = Path.GetFileNameWithoutExtension(sourcePath) + "_lightmapCombined." + ext;
         fileName = Path.GetFileNameWithoutExtension(AssetDatabase.GenerateUniqueAssetPath(Path.Combine(path, fileName)));
         path = EditorUtility.SaveFilePanelInProject("Save Asset", fileName, ext, "", path);
 
         if (!string.IsNullOrEmpty(path)) {
-            // ファイルを保存する
             File.WriteAllBytes(path, target);
             AssetDatabase.Refresh();
         }
@@ -138,16 +124,26 @@ public class LightmapCombine : ScriptableWizard
         return path;
     }
     
-    private string RelativeToAbsolutePath(string relativePath)
+    private void CreateMaterialVariant(Material originalMaterial, Texture2D newTexture, string objName)
     {
-        if (string.IsNullOrEmpty(relativePath))
-            return "";
+        if (originalMaterial == null || newTexture == null)
+        {
+            Debug.LogError("Original material or new texture is null.");
+            return;
+        }
 
-        string dataPath = Application.dataPath;
-        string projectPath = dataPath.Substring(0, dataPath.Length - 6); // "Assets"フォルダを除去
-        return Path.Combine(projectPath, relativePath).Replace('/', '\\');
+        var originalMaterialPath = AssetDatabase.GetAssetPath(originalMaterial);
+        var folderPath = Path.GetDirectoryName(originalMaterialPath);
+        var newMaterialName = $"{Path.GetFileNameWithoutExtension(originalMaterialPath)}_{objName}_lightmapCombined.mat";
+        var newMaterialPath = Path.Combine(folderPath, newMaterialName);
+
+        var newMaterial = new Material(originalMaterial);
+        newMaterial.SetTexture("_MainTex", newTexture);
+
+        AssetDatabase.CreateAsset(newMaterial, newMaterialPath);
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
     }
-    
 }
 
 #endif
