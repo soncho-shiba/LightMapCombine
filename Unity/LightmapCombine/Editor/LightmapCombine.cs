@@ -38,8 +38,8 @@ public class LightmapCombine : ScriptableWizard
                 var tempMaterial = new Material(Shader.Find(SHADER_NAME_LIGHTMAPCOMBINE));
                 SetUpMaterial(tempMaterial, meshRenderer, originalMaterial);
                 
-                var newTexture = ExportTexture(tempMaterial, originalMaterial, obj.name, lightmapCombineParent.name);
-                var newMaterialVariant = CreateMaterialVariant(originalMaterial, newTexture, obj.name, lightmapCombineParent.name);
+                var newTexture = ExportTexture(tempMaterial, originalMaterial, $"{lightmapCombineName}_{obj.name}");
+                var newMaterialVariant = CreateMaterialVariant(originalMaterial, newTexture, $"{lightmapCombineName}_{obj.name}");
 
                 // オブジェクトの複製を作成し、'LightMapCombine'の子として配置
                 var duplicateObj = Instantiate(obj, lightmapCombineParent.transform);
@@ -164,7 +164,7 @@ public class LightmapCombine : ScriptableWizard
         }
     }
 
-    private Texture2D ExportTexture(Material tempMaterial, Material originalMaterial, string objName, string lightmapCombineName)
+    private Texture2D ExportTexture(Material tempMaterial, Material originalMaterial, string prefix)
     {
         var mainTex = tempMaterial.GetTexture("_MainTex") as Texture2D;
         if (mainTex == null)
@@ -183,7 +183,7 @@ public class LightmapCombine : ScriptableWizard
         texture.Apply();
         RenderTexture.active = currentRT;
 
-        var savePath = SaveTextureAsset(texture.EncodeToPNG(), mainTex, $"{objName}_{lightmapCombineName}");
+        var savePath = SaveTextureAsset(texture.EncodeToPNG(), mainTex, prefix);
         RenderTexture.ReleaseTemporary(renderTexture);
 
         if (!string.IsNullOrEmpty(savePath)) {
@@ -220,12 +220,12 @@ public class LightmapCombine : ScriptableWizard
         newTextureImporter.SaveAndReimport();
     }
     
-    private string SaveTextureAsset(byte[] target, Texture2D mainTex, string suffix)
+    private string SaveTextureAsset(byte[] target, Texture2D mainTex, string prefix)
     {
         var sourcePath = AssetDatabase.GetAssetPath(mainTex);
         var directoryPath = Path.GetDirectoryName(sourcePath);
         var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(sourcePath);
-        var newFileName = $"{fileNameWithoutExtension}_{suffix}.png";
+        var newFileName = $"{prefix}_{fileNameWithoutExtension}.png";
         var newPath = Path.Combine(directoryPath, newFileName);
 
         // 同名ファイルが存在する場合、上書き
@@ -241,7 +241,7 @@ public class LightmapCombine : ScriptableWizard
         return newPath;
     }
     
-    private  Material CreateMaterialVariant(Material originalMaterial, Texture2D newTexture, string objName, string lightmapCombineName)
+    private  Material CreateMaterialVariant(Material originalMaterial, Texture2D newTexture, string prefix)
     {
         if (originalMaterial == null || newTexture == null)
         {
@@ -251,7 +251,7 @@ public class LightmapCombine : ScriptableWizard
 
         var originalMaterialPath = AssetDatabase.GetAssetPath(originalMaterial);
         var folderPath = Path.GetDirectoryName(originalMaterialPath);
-        var newMaterialName = $"{Path.GetFileNameWithoutExtension(originalMaterialPath)}_{objName}_{lightmapCombineName}.mat";
+        var newMaterialName = $"{prefix}_{Path.GetFileNameWithoutExtension(originalMaterialPath)}.mat";
         var newMaterialPath = Path.Combine(folderPath, newMaterialName);
 
         var newMaterial = new Material(originalMaterial);
