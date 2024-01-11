@@ -15,21 +15,39 @@ public class LightmapCombine : ScriptableWizard
     }
 
     private void OnWizardCreate()
-    {   
+    {
         CheckColorSpace();
         
         var objectsWithLightmap = GetObjectsWithLightmap();
-        
+
+        // 「LightMapCombine」GameObjectの作成または取得
+        var lightmapCombineParent = GameObject.Find("LightMapCombine") ?? new GameObject("LightMapCombine");
+
         foreach (var obj in objectsWithLightmap)
         {   
             var meshRenderer = obj.GetComponent<MeshRenderer>();
             foreach (var originalMaterial in meshRenderer.sharedMaterials)
             {
+                
                 EnableSRGBOnMainTex(originalMaterial);
+                
+                // RenderTextureに焼きこむ用の一時的なマテリアルを作成
                 var tempMaterial = new Material(Shader.Find(SHADER_NAME_LIGHTMAPCOMBINE));
                 SetUpMaterial(tempMaterial, meshRenderer, originalMaterial);
+                
                 var newTexture = ExportTexture(tempMaterial, originalMaterial, obj.name);
-                CreateMaterialVariant(originalMaterial, newTexture, obj.name);
+                var newMaterialVariant = CreateMaterialVariant(originalMaterial, newTexture, obj.name);
+
+                // オブジェクトの複製を作成し、'LightMapCombine'の子として配置
+                var duplicateObj = Instantiate(obj, lightmapCombineParent.transform);
+                duplicateObj.name = obj.name;
+
+                // 新しいマテリアルを複製したオブジェクトに適用
+                var duplicateMeshRenderer = duplicateObj.GetComponent<MeshRenderer>();
+                if (duplicateMeshRenderer != null)
+                {
+                    duplicateMeshRenderer.sharedMaterials = new Material[] { newMaterialVariant };
+                }
             }
         }
     }
@@ -192,12 +210,12 @@ public class LightmapCombine : ScriptableWizard
         return newPath;
     }
     
-    private void CreateMaterialVariant(Material originalMaterial, Texture2D newTexture, string objName)
+    private  Material CreateMaterialVariant(Material originalMaterial, Texture2D newTexture, string objName)
     {
         if (originalMaterial == null || newTexture == null)
         {
             Debug.LogError("Original material or new texture is null.");
-            return;
+            return　null;
         }
 
         var originalMaterialPath = AssetDatabase.GetAssetPath(originalMaterial);
@@ -211,6 +229,8 @@ public class LightmapCombine : ScriptableWizard
         AssetDatabase.CreateAsset(newMaterial, newMaterialPath);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
+
+        return newMaterial;
     }
 }
 
