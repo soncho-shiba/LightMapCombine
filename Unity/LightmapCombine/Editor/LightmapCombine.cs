@@ -84,7 +84,7 @@ public class LightmapCombine : ScriptableWizard
     }
     private static List<GameObject> GetObjectsWithLightmap()
     {
-        var allObjects = UnityEngine.Object.FindObjectsOfType<GameObject>();
+        var allObjects = UnityEngine.Object.FindObjectsOfType<GameObject>(true); // 非アクティブなオブジェクトも含める
         var objectsWithLightmap = new List<GameObject>();
 
         foreach (var obj in allObjects)
@@ -98,11 +98,16 @@ public class LightmapCombine : ScriptableWizard
             var meshRenderer = obj.GetComponent<MeshRenderer>();
             if (meshRenderer != null && meshRenderer.lightmapIndex >= 0)
             {
+                // オブジェクトをアクティブにする
+                obj.SetActive(true);
+
+                // リストに追加
                 objectsWithLightmap.Add(obj);
             }
         }
         return objectsWithLightmap;
     }
+
     
 
     private void EnableSRGBOnMainTex(Material material)
