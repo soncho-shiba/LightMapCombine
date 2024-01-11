@@ -174,23 +174,22 @@ public class LightmapCombine : ScriptableWizard
     private string SaveTextureAsset(byte[] target, Texture2D mainTex, string objName)
     {
         var sourcePath = AssetDatabase.GetAssetPath(mainTex);
-        var path = Path.GetDirectoryName(sourcePath);
-        var ext = "png";
+        var directoryPath = Path.GetDirectoryName(sourcePath);
+        var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(sourcePath);
+        var newFileName = $"{fileNameWithoutExtension}_{objName}_lightmapCombined.png";
+        var newPath = Path.Combine(directoryPath, newFileName);
 
-        if (!Directory.Exists(path)) {
-            Directory.CreateDirectory(path);
+        // 同名ファイルが存在する場合、上書き
+        if (File.Exists(newPath))
+        {
+            File.Delete(newPath);
         }
 
-        var fileName = Path.GetFileNameWithoutExtension(sourcePath) + "_" + objName +  "_lightmapCombined." + ext;
-        fileName = Path.GetFileNameWithoutExtension(AssetDatabase.GenerateUniqueAssetPath(Path.Combine(path, fileName)));
-        path = EditorUtility.SaveFilePanelInProject("Save Asset", fileName, ext, "", path);
+        // テクスチャを保存
+        File.WriteAllBytes(newPath, target);
+        AssetDatabase.Refresh();
 
-        if (!string.IsNullOrEmpty(path)) {
-            File.WriteAllBytes(path, target);
-            AssetDatabase.Refresh();
-        }
-
-        return path;
+        return newPath;
     }
     
     private void CreateMaterialVariant(Material originalMaterial, Texture2D newTexture, string objName)
