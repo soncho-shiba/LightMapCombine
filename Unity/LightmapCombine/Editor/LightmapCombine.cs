@@ -19,6 +19,11 @@ public class LightmapCombine : ScriptableWizard
         CheckColorSpace();
         
         var objectsWithLightmap = GetObjectsWithLightmap();
+        if (objectsWithLightmap.Count == 0)
+        {
+            EditorUtility.DisplayDialog("Lightmap Combine Error", "No objects with lightmap found in the scene.", "OK");
+            return;
+        }
 
         // 「LightMapCombine」GameObjectの名前を決定
         var lightmapCombineName = GetUniqueLightMapCombineName();
